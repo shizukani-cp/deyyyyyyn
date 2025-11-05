@@ -1,65 +1,225 @@
-import Image from "next/image";
+"use client";
+import React, { useEffect, useRef, useState } from "react";
 
-export default function Home() {
+type color = string;
+
+export default function App() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+    <div className="App flex font-sans text-center">
+      <Main />
     </div>
   );
 }
+
+function Main() {
+  const [back, setBack] = useState<color>("#cc0000");
+  const [hammer, setHammer] = useState<color>("#ffd700");
+  const [pitch, setPitch] = useState<number>(1);
+
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioUrl = "soviet_deyyyyyyn.m4a";
+  const sourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const bufferRef = useRef<AudioBuffer | null>(null);
+
+  function onChange(newHue: number) {
+    setBack(rgbToHex(hueToRgb(newHue, 1, 0.8)));
+    setHammer(rgbToHex(hueToRgb(newHue + 72, 1, 1)));
+    setPitch(newHue / 180 + 1);
+    stopAudio();
+    playAudio(newHue / 180 + 1);
+  }
+
+  useEffect(() => {
+    audioContextRef.current = new AudioContext();
+    fetch(audioUrl)
+      .then((res) => res.arrayBuffer())
+      .then((arrayBuffer) => {
+        if (audioContextRef.current) {
+          audioContextRef.current.decodeAudioData(arrayBuffer).then(
+            (audioBuffer) => {
+              bufferRef.current = audioBuffer;
+            },
+          );
+        }
+      });
+
+    return () => {
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
+    };
+  }, [audioUrl]);
+
+  function playAudio(pitch: number) {
+    if (audioContextRef.current) {
+      const source = audioContextRef.current.createBufferSource();
+      source.buffer = bufferRef.current;
+      source.playbackRate.value = pitch;
+      source.connect(audioContextRef.current.destination);
+      source.start(0);
+      sourceRef.current = source;
+    }
+  }
+
+  const stopAudio = () => {
+    if (sourceRef.current) {
+      sourceRef.current.stop();
+    }
+  };
+  return (
+    <>
+      <div className="flexItem left flex-1 flex flex-col justify-between">
+        <HueSlider onChange={onChange} />
+        <div>
+          <button onClick={() => playAudio(pitch)} className="button w-1/2">
+            ▶️
+          </button>
+          <button onClick={stopAudio} className="button w-1/2">⏹️</button>
+        </div>
+      </div>
+      <div className="flexItem">
+        <img
+          src={`data:image/svg+xml;base64,${btoa(getSvgText(back, hammer))}`}
+          className="max-w-full"
+        />
+      </div>
+    </>
+  );
+}
+
+const HueSlider = ({ onChange }: { onChange: (newHue: number) => void }) => {
+  const [hue, setHue] = useState(0);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newHue: number = Number(e.target.value);
+    setHue(newHue);
+    if (onChange) onChange(newHue);
+  };
+
+  return (
+    <input
+      type="range"
+      min={0}
+      max={360}
+      value={hue}
+      onChange={handleChange}
+      id="hueSlider"
+      className="w-full h-6 rounded-full appearance-none outline-none"
+    />
+  );
+};
+
+function hueToRgb(
+  h: number,
+  s: number,
+  v: number,
+): [number, number, number] {
+  h = h % 360;
+
+  s = Math.max(0, Math.min(s, 1));
+  v = Math.max(0, Math.min(v, 1));
+
+  const c = v * s;
+  const hPrime = h / 60;
+  const x = c * (1 - Math.abs((hPrime % 2) - 1));
+
+  let r1 = 0, g1 = 0, b1 = 0;
+
+  if (hPrime < 1) {
+    r1 = c;
+    g1 = x;
+    b1 = 0;
+  } else if (hPrime < 2) {
+    r1 = x;
+    g1 = c;
+    b1 = 0;
+  } else if (hPrime < 3) {
+    r1 = 0;
+    g1 = c;
+    b1 = x;
+  } else if (hPrime < 4) {
+    r1 = 0;
+    g1 = x;
+    b1 = c;
+  } else if (hPrime < 5) {
+    r1 = x;
+    g1 = 0;
+    b1 = c;
+  } else {
+    r1 = c;
+    g1 = 0;
+    b1 = x;
+  }
+
+  const m = v - c;
+
+  const r = Math.round((r1 + m) * 255);
+  const g = Math.round((g1 + m) * 255);
+  const b = Math.round((b1 + m) * 255);
+
+  return [r, g, b];
+}
+
+function rgbToHex(rgb: [number, number, number]): string {
+  return (
+    "#" +
+    rgb
+      .map((value) => {
+        const clamped = Math.max(0, Math.min(255, value));
+        return clamped.toString(16).padStart(2, "0");
+      })
+      .join("")
+  );
+}
+
+const getSvgText = (back: color, hammer: color) => {
+  return `
+        <svg
+          xmlns:dc="http://purl.org/dc/elements/1.1/"
+          xmlns:cc="http://creativecommons.org/ns#"
+          xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+          xmlns:svg="http://www.w3.org/2000/svg"
+          xmlns="http://www.w3.org/2000/svg"
+          version="1.1"
+          width="1200"
+          height="600"
+          id="svg10">
+          <metadata
+            id="metadata16">
+            <rdf:RDF>
+              <cc:Work
+                rdf:about="">
+                <dc:format>image/svg+xml</dc:format>
+                <dc:type
+                  rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+                <dc:title></dc:title>
+              </cc:Work>
+            </rdf:RDF>
+          </metadata>
+          <defs
+            id="defs14" />
+          <path
+            fill="${back}"
+            fill-opacity="1"
+            d="M0 0h1200v600H0z"
+            id="path2"
+            style="fill:${back};fill-opacity:1" />
+          <path
+            id="path11728"
+            d="m 200.0005,37.5 -8.41933,25.911886 H 164.336 L 186.37777,79.426122 177.95844,105.338 200.0005,89.323465 222.04257,105.338 213.62324,79.426122 235.665,63.411886 h -27.24516 z m 0,13.499987 5.38828,16.583473 h 17.43718 l -14.107,10.249496 5.38827,16.583472 L 200.0005,84.167224 185.89378,94.416428 191.28205,77.832956 177.17504,67.58346 h 17.43718 z"
+            style="fill:${hammer};fill-opacity:1;stroke:none;stroke-width:0.14999977px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1" />
+          <g
+            style="fill:${hammer};fill-opacity:1"
+            id="g2900"
+            transform="matrix(0.98931879,0,0,0.98673811,3.8297658,3.7659398)">
+            <path
+              id="rect4165-6"
+              d="m 137.43744,171.69421 18.86296,18.9937 17.78834,-17.66589 c 27.05847,29.021 55.43807,56.99501 82.28704,86.12782 4.03444,4.06233 10.59815,4.085 14.66056,0.0506 4.06232,-4.03445 4.08499,-10.59815 0.0506,-14.66056 -28.81871,-27.1901 -57.72545,-54.60143 -86.55328,-81.89095 l 23.96499,-23.80003 -33.34026,-4.61605 z"
+              style="fill:${hammer};fill-opacity:1;stroke:none;stroke-width:0.48919073;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1" />
+            <path
+              id="path4179-3"
+              d="m 198.2887,110.1955 c 15.51743,8.7394 27.29872,21.28122 34.2484,34.3924 7.04394,13.28902 10.13959,27.16218 10.20325,38.25433 0.13054,22.74374 -18.43771,41.18184 -41.18183,41.18184 -12.13597,0 -23.04607,-5.24868 -30.58302,-13.60085 l -4.16863,3.51033 c -0.70999,-0.27231 -1.46387,-0.41221 -2.22429,-0.41276 -1.82948,1.9e-4 -3.56621,0.80531 -4.74859,2.20136 -2.97368,0.38896 -5.46251,2.44529 -6.40534,5.29224 -3.13486,6.28843 -8.63524,11.21997 -15.29104,13.4776 -0.0637,0.0216 -0.11992,0.05 -0.1758,0.0783 -3.07749,1.12758 -6.16259,3.1643 -8.78919,5.80245 -5.19155,5.23656 -7.72858,11.93658 -6.30024,16.63822 -0.14098,0.40857 -0.21361,0.83759 -0.21498,1.26979 1.5e-4,2.17082 1.75991,3.93058 3.93073,3.93073 0.54341,-0.002 1.08053,-0.11639 1.57745,-0.33632 4.69369,1.05881 11.06885,-1.54582 16.05444,-6.55917 2.82624,-2.85072 4.94356,-6.22349 5.98303,-9.53062 2.31696,-6.62278 7.29699,-12.01856 13.62281,-15.05312 0.15105,-0.0725 0.27303,-0.14714 0.38218,-0.22358 2.12082,-1.01408 3.67251,-2.92895 4.225,-5.2139 9.70222,11.44481 24.25255,18.75299 40.51876,19.13577 29.83352,0.70205 52.13299,-21.25802 53.16414,-52.83642 0.51894,-15.89259 -5.62993,-36.3847 -19.6412,-53.19089 -10.70835,-12.84441 -26.40987,-23.50795 -44.18699,-28.20777 z"
+              style="fill:${hammer};fill-opacity:1;stroke:none;stroke-width:0.50003481;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1" />
+          </g>
+        </svg>`;
+};
